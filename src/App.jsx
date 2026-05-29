@@ -1,242 +1,203 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { HashRouter, Link } from 'react-router-dom';
+import { HashRouter, Route, Routes } from 'react-router-dom';
 import axios from 'axios';
 import { ToastContainer } from 'react-toastify';
-import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { HiPlus } from 'react-icons/hi';
-import { FiCheckCircle } from 'react-icons/fi';
-import { clsx } from 'clsx';
+import { FiSearch } from 'react-icons/fi';
+import { WiDaySunny, WiNightClear, WiCloudy, WiRain, WiSnow } from 'react-icons/wi';
 import { format } from 'date-fns';
-import { useForm } from 'react-hook-form';
-import 'tailwindcss/base.css';
-import 'tailwindcss/components.css';
-import 'tailwindcss/utilities.css';
+import { clsx } from 'clsx';
 
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const App = () => {
-  const [cards, setCards] = useState([
-    { id: 1, title: 'To Do', priority: 'High', assignee: 'John Doe' },
-    { id: 2, title: 'In Progress', priority: 'Medium', assignee: 'Jane Doe' },
-    { id: 3, title: 'Review', priority: 'Low', assignee: 'Bob Smith' },
-    { id: 4, title: 'Done', priority: 'High', assignee: 'Alice Johnson' },
-  ]);
+  const [city, setCity] = useState('London');
+  const [units, setUnits] = useState('metric');
+  const [weather, setWeather] = useState(null);
+  const [forecast, setForecast] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [draggingCard, setDraggingCard] = useState(null);
-
-  const { register, handleSubmit, reset } = useForm();
-
-  const handleDragStart = (event, card) => {
-    setDraggingCard(card);
-  };
-
-  const handleDrop = (event, column) => {
-    event.preventDefault();
-    if (draggingCard) {
-      const updatedCards = cards.map((card) => {
-        if (card.id === draggingCard.id) {
-          return { ...card, column };
-        }
-        return card;
-      });
-      setCards(updatedCards);
-      setDraggingCard(null);
-    }
-  };
-
-  const handleAddCard = useCallback(async (data) => {
+  const fetchWeather = useCallback(async () => {
     try {
-      const response = await axios.post(`${BASE_URL}/cards`, data);
-      setCards([...cards, response.data]);
-      reset();
-      setModalOpen(false);
-      toast.success('Card added successfully!');
+      setLoading(true);
+      setError(null);
+      const response = await axios.get(`${BASE_URL}/api/v1/weather/current?city=${city}&units=${units}`);
+      setWeather(response.data);
     } catch (error) {
-      toast.error('Error adding card!');
+      setError(error);
+    } finally {
+      setLoading(false);
     }
-  }, [cards, reset]);
+  }, [city, units]);
+
+  const fetchForecast = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await axios.get(`${BASE_URL}/api/v1/weather/forecast?city=${city}&units=${units}`);
+      setForecast(response.data);
+    } catch (error) {
+      setError(error);
+    } finally {
+      setLoading(false);
+    }
+  }, [city, units]);
+
+  useEffect(() => {
+    fetchWeather();
+    fetchForecast();
+  }, [fetchWeather, fetchForecast]);
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    setCity(searchTerm);
+    setSearchTerm('');
+  };
+
+  const handleUnitsToggle = () => {
+    setUnits(units === 'metric' ? 'imperial' : 'metric');
+  };
+
+  const getWeatherIcon = (condition) => {
+    switch (condition) {
+      case 'sunny':
+        return <WiDaySunny />;
+      case 'cloudy':
+        return <WiCloudy />;
+      case 'rainy':
+        return <WiRain />;
+      case 'snowy':
+        return <WiSnow />;
+      default:
+        return <WiNightClear />;
+    }
+  };
+
+  const getDay = (date) => {
+    return format(new Date(date), 'EEE');
+  };
 
   return (
-    <HashRouter>
-      <div className="h-screen flex flex-col">
-        <header className="bg-blue-500 text-white p-4">
-          <h1 className="text-3xl font-bold">Weather Dashboard</h1>
-        </header>
-        <main className="flex-1 p-4">
-          <div className="flex justify-between mb-4">
-            <h2 className="text-2xl font-bold">Kanban Board</h2>
-            <button
-              className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-              onClick={() => setModalOpen(true)}
-            >
-              <HiPlus className="mr-2" /> Add Card
-            </button>
-          </div>
-          <div className="flex justify-between">
-            <div
-              className={clsx(
-                'bg-red-200 p-4 w-1/4',
-                'flex flex-col justify-between'
-              )}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => handleDrop(event, 'To Do')}
-            >
-              <h3 className="text-lg font-bold text-red-500">To Do</h3>
-              <span className="text-sm">{cards.filter((card) => card.column === 'To Do').length}</span>
-              {cards
-                .filter((card) => card.column === 'To Do')
-                .map((card) => (
-                  <div
-                    key={card.id}
-                    draggable
-                    onDragStart={(event) => handleDragStart(event, card)}
-                    className="bg-white p-2 mb-2 shadow-sm"
-                  >
-                    <h4 className="text-sm font-bold">{card.title}</h4>
-                    <span className="text-xs">{card.priority}</span>
-                    <span className="text-xs">{card.assignee}</span>
-                  </div>
-                ))}
-            </div>
-            <div
-              className={clsx(
-                'bg-yellow-200 p-4 w-1/4',
-                'flex flex-col justify-between'
-              )}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => handleDrop(event, 'In Progress')}
-            >
-              <h3 className="text-lg font-bold text-yellow-500">In Progress</h3>
-              <span className="text-sm">{cards.filter((card) => card.column === 'In Progress').length}</span>
-              {cards
-                .filter((card) => card.column === 'In Progress')
-                .map((card) => (
-                  <div
-                    key={card.id}
-                    draggable
-                    onDragStart={(event) => handleDragStart(event, card)}
-                    className="bg-white p-2 mb-2 shadow-sm"
-                  >
-                    <h4 className="text-sm font-bold">{card.title}</h4>
-                    <span className="text-xs">{card.priority}</span>
-                    <span className="text-xs">{card.assignee}</span>
-                  </div>
-                ))}
-            </div>
-            <div
-              className={clsx(
-                'bg-blue-200 p-4 w-1/4',
-                'flex flex-col justify-between'
-              )}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => handleDrop(event, 'Review')}
-            >
-              <h3 className="text-lg font-bold text-blue-500">Review</h3>
-              <span className="text-sm">{cards.filter((card) => card.column === 'Review').length}</span>
-              {cards
-                .filter((card) => card.column === 'Review')
-                .map((card) => (
-                  <div
-                    key={card.id}
-                    draggable
-                    onDragStart={(event) => handleDragStart(event, card)}
-                    className="bg-white p-2 mb-2 shadow-sm"
-                  >
-                    <h4 className="text-sm font-bold">{card.title}</h4>
-                    <span className="text-xs">{card.priority}</span>
-                    <span className="text-xs">{card.assignee}</span>
-                  </div>
-                ))}
-            </div>
-            <div
-              className={clsx(
-                'bg-green-200 p-4 w-1/4',
-                'flex flex-col justify-between'
-              )}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => handleDrop(event, 'Done')}
-            >
-              <h3 className="text-lg font-bold text-green-500">Done</h3>
-              <span className="text-sm">{cards.filter((card) => card.column === 'Done').length}</span>
-              {cards
-                .filter((card) => card.column === 'Done')
-                .map((card) => (
-                  <div
-                    key={card.id}
-                    draggable
-                    onDragStart={(event) => handleDragStart(event, card)}
-                    className="bg-white p-2 mb-2 shadow-sm"
-                  >
-                    <h4 className="text-sm font-bold">{card.title}</h4>
-                    <span className="text-xs">{card.priority}</span>
-                    <span className="text-xs">{card.assignee}</span>
-                  </div>
-                ))}
-            </div>
-          </div>
-        </main>
-        {modalOpen && (
-          <div
-            className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex justify-center items-center"
-            onClick={() => setModalOpen(false)}
-          >
-            <div
-              className="bg-white p-4 shadow-sm"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <h2 className="text-lg font-bold">Add Card</h2>
-              <form onSubmit={handleSubmit(handleAddCard)}>
-                <div className="mb-4">
-                  <label className="block text-sm font-bold mb-2" htmlFor="title">
-                    Title
-                  </label>
+    <div className="app-wrapper">
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <div className="max-w-5xl mx-auto p-4">
+              <header className="flex justify-between items-center mb-4">
+                <h1 className="text-3xl font-bold">Weather App</h1>
+                <form onSubmit={handleSearch} className="flex items-center">
                   <input
                     type="text"
-                    id="title"
-                    className="block w-full p-2 border border-gray-400 rounded"
-                    {...register('title')}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search city"
+                    className="px-4 py-2 border border-gray-300 rounded-lg"
                   />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-bold mb-2" htmlFor="priority">
-                    Priority
-                  </label>
-                  <select
-                    id="priority"
-                    className="block w-full p-2 border border-gray-400 rounded"
-                    {...register('priority')}
+                  <button
+                    type="submit"
+                    className="ml-2 px-4 py-2 bg-blue-500 text-white rounded-lg"
                   >
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
-                  </select>
+                    <FiSearch />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleUnitsToggle}
+                    className="ml-2 px-4 py-2 bg-blue-500 text-white rounded-lg"
+                  >
+                    {units === 'metric' ? '°C' : '°F'}
+                  </button>
+                </form>
+              </header>
+              {loading ? (
+                <p>Loading...</p>
+              ) : error ? (
+                <p>Error: {error.message}</p>
+              ) : (
+                <div>
+                  {weather && (
+                    <div
+                      className={clsx(
+                        'bg-gradient-to-r from-blue-500 to-blue-300',
+                        'p-4 rounded-lg mb-4'
+                      )}
+                    >
+                      <h2 className="text-2xl font-bold">{weather.city}</h2>
+                      <div className="flex items-center mb-2">
+                        {getWeatherIcon(weather.condition)}
+                        <span className="text-4xl font-bold ml-2">
+                          {weather.temperature}
+                          {units === 'metric' ? '°C' : '°F'}
+                        </span>
+                      </div>
+                      <p>
+                        Feels like: {weather.feels_like}
+                        {units === 'metric' ? '°C' : '°F'}
+                      </p>
+                    </div>
+                  )}
+                  {forecast && (
+                    <div className="flex flex-wrap justify-center mb-4">
+                      {forecast.map((day, index) => (
+                        <div
+                          key={index}
+                          className="bg-gray-200 p-4 rounded-lg m-2"
+                        >
+                          <h3 className="text-lg font-bold">{getDay(day.date)}</h3>
+                          <p>
+                            High: {day.high}
+                            {units === 'metric' ? '°C' : '°F'}
+                          </p>
+                          <p>
+                            Low: {day.low}
+                            {units === 'metric' ? '°C' : '°F'}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {weather && (
+                    <div className="flex flex-wrap justify-center mb-4">
+                      <div className="bg-gray-200 p-4 rounded-lg m-2">
+                        <h3 className="text-lg font-bold">Humidity</h3>
+                        <p>{weather.humidity}%</p>
+                      </div>
+                      <div className="bg-gray-200 p-4 rounded-lg m-2">
+                        <h3 className="text-lg font-bold">Wind Speed</h3>
+                        <p>{weather.wind_speed} km/h</p>
+                      </div>
+                      <div className="bg-gray-200 p-4 rounded-lg m-2">
+                        <h3 className="text-lg font-bold">Visibility</h3>
+                        <p>{weather.visibility} km</p>
+                      </div>
+                    </div>
+                  )}
+                  {weather && (
+                    <div className="flex flex-wrap justify-center mb-4">
+                      <div className="bg-gray-200 p-4 rounded-lg m-2">
+                        <h3 className="text-lg font-bold">Sunrise</h3>
+                        <p>{format(new Date(weather.sunrise), 'HH:mm')}</p>
+                      </div>
+                      <div className="bg-gray-200 p-4 rounded-lg m-2">
+                        <h3 className="text-lg font-bold">Sunset</h3>
+                        <p>{format(new Date(weather.sunset), 'HH:mm')}</p>
+                      </div>
+                      <div className="bg-gray-200 p-4 rounded-lg m-2">
+                        <h3 className="text-lg font-bold">UV Index</h3>
+                        <p>{weather.uv_index}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-bold mb-2" htmlFor="assignee">
-                    Assignee
-                  </label>
-                  <input
-                    type="text"
-                    id="assignee"
-                    className="block w-full p-2 border border-gray-400 rounded"
-                    {...register('assignee')}
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-                >
-                  <FiCheckCircle className="mr-2" /> Add
-                </button>
-              </form>
+              )}
             </div>
-          </div>
-        )}
-      </div>
+          }
+        />
+      </Routes>
       <ToastContainer />
-    </HashRouter>
+    </div>
   );
 };
 
